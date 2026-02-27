@@ -11,6 +11,11 @@ desktop/build/
 # Env
 .env
 **/.env
+token*.json
+*token*.json
+credentials*.json
+*credential*.json
+client_secret*.json
 
 # Logs / OS
 *.log

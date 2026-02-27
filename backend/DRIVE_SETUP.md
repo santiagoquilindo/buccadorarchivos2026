@@ -1,71 +1,47 @@
-# Drive Incremental Sync Setup
+# Configuracion Google Drive (resumen)
 
-## 1) Variables
-Crea `backend/.env` (no lo subas a git) con:
+Este proyecto usa Google Drive API para sincronizar archivos y responder webhooks.
 
-```
-PORT=3000
-HOST=127.0.0.1
-DRIVE_AUTH_MODE=oauth
-DRIVE_FOLDER_ID=TU_FOLDER_ID
+## 1) Variables de entorno (backend/.env)
+
+Agrega/edita estas variables:
+
+```env
+# OAuth
 GOOGLE_CLIENT_ID=[REDACTED]
 GOOGLE_CLIENT_SECRET=[REDACTED]
-GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2/callback
+GOOGLE_REDIRECT_URI=https://developers.google.com/oauthplayground
 GOOGLE_REFRESH_TOKEN=[REDACTED]
+
+# Drive
+DRIVE_ID=<REPLACE_WITH_DRIVE_ID>
+DRIVE_FOLDER_ID=<REPLACE_WITH_DRIVE_FOLDER_ID>
+
+# Webhook (opcional)
+DRIVE_WEBHOOK_BASE_URL=<REPLACE_WITH_PUBLIC_HTTPS_URL>
+DRIVE_WEBHOOK_TOKEN=[REDACTED]
 ```
 
-Para Shared Drive:
+## 2) Obtener URL de consentimiento
 
-```
-DRIVE_USE_SHARED_DRIVE=true
-DRIVE_ID=TU_SHARED_DRIVE_ID
-```
-
-## 2) Obtener refresh token (OAuth)
-Desde `backend/`:
-
-```
+```bash
 npm run oauth:url
 ```
 
-Autoriza la app y copia `code` del redirect.
+## 3) Intercambiar `code` por refresh token
 
+```bash
+npm run oauth:token -- --code "<CODE>"
 ```
-npm run oauth:token -- --code=TU_CODE
-```
 
-Guarda el valor como `GOOGLE_REFRESH_TOKEN`.
+## 4) Sincronizacion manual
 
-## 3) Sync incremental
-Manual:
-
-```
+```bash
 npm run drive:sync
 ```
 
-Por API (requiere login admin):
+## Seguridad
 
-- `POST /api/drive/sync`
-- `GET /api/drive/status`
-
-## 4) Webhook push (opcional)
-Requiere URL HTTPS publica del backend:
-
-```
-DRIVE_WEBHOOK_URL=https://tu-dominio/api/drive/webhook
-DRIVE_WEBHOOK_TOKEN=[REDACTED]
-DRIVE_WATCH_EXPIRATION_MS=86400000
-```
-
-Activar canal:
-
-- `POST /api/drive/watch/start`
-- `POST /api/drive/watch/stop`
-
-Importante: el webhook solo dispara sync; la verdad la mantiene Changes API.
-
-## 5) Buenas practicas
-- Nunca compartas `client_secret` ni `refresh_token`.
-- Rota secretos si se exponen.
-- Usa cuenta de servicio solo si aplica a Workspace/shared drive.
-- Monitorea `GET /api/drive/status` para expiracion del watch.
+- Nunca subas `.env` al repositorio.
+- Rota inmediatamente cualquier credencial que se haya filtrado.
+- No compartas `client_secret`, `refresh_token` ni tokens de webhook.

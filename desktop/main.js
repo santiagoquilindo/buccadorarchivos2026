@@ -40,7 +40,7 @@ function waitForServer(url, timeoutMs = 15000) {
   });
 }
 
-function findFreePort(preferred = 3750) {
+function findFreePort(preferred = 3786) {
   const canUsePort = (port) =>
     new Promise((resolve) => {
       const server = net.createServer();
@@ -64,6 +64,8 @@ function findFreePort(preferred = 3750) {
   });
 }
 
+const PREFERRED_BACKEND_PORT = 3786;
+
 async function startBackend() {
   const backendDir = app.isPackaged
     ? path.join(process.resourcesPath, "backend")
@@ -72,7 +74,7 @@ async function startBackend() {
     ? path.join(process.resourcesPath, "frontend")
     : path.join(__dirname, "..", "frontend");
   const serverPath = path.join(backendDir, "src", "server.js");
-  const port = await findFreePort(3750);
+  const port = await findFreePort(PREFERRED_BACKEND_PORT);
   const driveTokenPath = path.join(app.getPath("userData"), "drive_tokens.json");
   const driveLocalDir = path.join(app.getPath("userData"), "drive_cache");
 
@@ -88,7 +90,8 @@ async function startBackend() {
       DRIVE_TOKEN_PATH: driveTokenPath,
       DRIVE_FOLDER_ID: "1AVWtreQK7XZ5ccShIBKksAHObwZjAKia",
       ALLOWED_EMAILS: "sagcauca@gmail.com,sagcaucapw@gmail.com",
-      DRIVE_LOCAL_DIR: driveLocalDir
+      DRIVE_LOCAL_DIR: driveLocalDir,
+      DRIVE_OAUTH_REQUIRED_PORT: String(PREFERRED_BACKEND_PORT)
     },
     windowsHide: true,
     stdio: "inherit"

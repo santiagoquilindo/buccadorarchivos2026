@@ -27,6 +27,18 @@ function parseAllowedEmails() {
     .filter(Boolean);
 }
 
+function getRequiredOauthPort() {
+  const raw = String(process.env.DRIVE_OAUTH_REQUIRED_PORT || "3786").trim();
+  const port = Number(raw);
+  return Number.isFinite(port) && port > 0 ? port : 3786;
+}
+
+function getCurrentServerPort() {
+  const raw = String(process.env.PORT || "").trim();
+  const port = Number(raw);
+  return Number.isFinite(port) && port > 0 ? port : null;
+}
+
 function buildOAuthClient() {
   const clientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
   const clientSecret = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
@@ -142,17 +154,34 @@ async function downloadDriveFile(drive, file, localPath) {
 
 function getConnectedStatus() {
   const data = loadTokenData();
+  const requiredOauthPort = getRequiredOauthPort();
+  const currentPort = getCurrentServerPort();
+  const oauthPortReady = currentPort === requiredOauthPort;
   if (!data || !data.tokens?.refresh_token) {
-    return { connected: false };
+    return {
+      connected: false,
+      oauthPortReady,
+      currentPort,
+      requiredOauthPort,
+    };
   }
   return {
     connected: true,
     email: data.email || null,
     lastSyncAt: data.lastSyncAt || null,
+    oauthPortReady,
+    currentPort,
+    requiredOauthPort,
   };
 }
 
 function startConnect() {
+  const requiredOauthPort = getRequiredOauthPort();
+  const currentPort = getCurrentServerPort();
+  if (currentPort !== requiredOauthPort) {
+    throw makeError(409, `Para conectar Drive, libera el puerto ${requiredOauthPort} y vuelve a intentar.`);
+  }
+
   const oauth2 = buildOAuthClient();
   const url = oauth2.generateAuthUrl({
     access_type: "offline",

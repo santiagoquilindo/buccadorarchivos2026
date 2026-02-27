@@ -156,6 +156,9 @@
         const email = data.email ? ` (${data.email})` : "";
         driveConnection.textContent = `Drive: ${driveConnected ? "Conectado" : "No conectado"}${email}`;
         syncState.textContent = `Ultima sincronizacion manual: ${last}`;
+        if (data.oauthPortReady === false) {
+          setMsg(syncMsg, `Para conectar Drive, libera el puerto ${data.requiredOauthPort || 3786} y vuelve a intentar.`, "error");
+        }
         btnConnectDrive.textContent = driveConnected ? "Reconectar Drive" : "Conectar Drive";
       } catch (e) {
         driveConnected = false;
@@ -325,7 +328,11 @@
         }
         setMsg(syncMsg, "Drive conectado correctamente.", "ok");
       } catch (e) {
-        setMsg(syncMsg, e.message, "error");
+        if ((e.message || "").includes("puerto 3786")) {
+          setMsg(syncMsg, "Para conectar Drive, libera el puerto 3786 y vuelve a intentar.", "error");
+        } else {
+          setMsg(syncMsg, e.message, "error");
+        }
       } finally {
         btnConnectDrive.disabled = false;
         btnConnectDrive.textContent = driveConnected ? "Reconectar Drive" : "Conectar Drive";

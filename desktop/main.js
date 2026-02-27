@@ -73,6 +73,8 @@ async function startBackend() {
     : path.join(__dirname, "..", "frontend");
   const serverPath = path.join(backendDir, "src", "server.js");
   const port = await findFreePort(3750);
+  const driveTokenPath = path.join(app.getPath("userData"), "drive_tokens.json");
+  const driveLocalDir = path.join(app.getPath("userData"), "drive_cache");
 
   backendProc = spawn(process.execPath, [serverPath], {
     cwd: backendDir,
@@ -82,7 +84,11 @@ async function startBackend() {
       PORT: String(port),
       HOST: "127.0.0.1",
       BACKEND_ROOT: backendDir,
-      FRONTEND_ROOT: frontendDir
+      FRONTEND_ROOT: frontendDir,
+      DRIVE_TOKEN_PATH: driveTokenPath,
+      DRIVE_FOLDER_ID: "1AVWtreQK7XZ5ccShIBKksAHObwZjAKia",
+      ALLOWED_EMAILS: "sagcauca@gmail.com,sagcaucapw@gmail.com",
+      DRIVE_LOCAL_DIR: driveLocalDir
     },
     windowsHide: true,
     stdio: "inherit"

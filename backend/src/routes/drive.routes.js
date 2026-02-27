@@ -1,8 +1,34 @@
 const express = require("express");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const driveSyncService = require("../services/driveSyncService");
+const driveManualSyncService = require("../services/driveManualSyncService");
 
 const router = express.Router();
+
+function renderOAuthResultPage(title, message) {
+  const safeTitle = String(title || "Drive");
+  const safeMessage = String(message || "");
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${safeTitle}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; color: #222; background: #f7f7f7; }
+    .card { max-width: 680px; margin: 24px auto; background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 14px rgba(0,0,0,.08); }
+    h1 { margin: 0 0 10px; font-size: 22px; }
+    p { margin: 0; font-size: 16px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${safeTitle}</h1>
+    <p>${safeMessage}</p>
+  </div>
+</body>
+</html>`;
+}
 
 function safeEquals(a, b) {
   const left = String(a || "");
@@ -15,19 +41,61 @@ function safeEquals(a, b) {
 
 router.get("/status", requireAuth, async (req, res) => {
   try {
-    res.json(driveSyncService.getStatus());
+    res.json(driveManualSyncService.getConnectedStatus());
   } catch (err) {
     res.status(500).json({ message: `Error consultando estado: ${err.message}` });
   }
 });
 
+router.post("/connect/start", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  try {
+    res.json(driveManualSyncService.startConnect());
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message || "Error iniciando conexion de Drive" });
+  }
+});
+
+router.post("/connect/finish", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  try {
+    const { code } = req.body || {};
+    const out = await driveManualSyncService.finishConnect(code);
+    res.json(out);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message || "Error finalizando conexion de Drive" });
+  }
+});
+
+router.get("/oauth2/callback", async (req, res) => {
+  const code = String(req.query?.code || "").trim();
+  if (!code) {
+    return res
+      .status(400)
+      .type("html")
+      .send(renderOAuthResultPage("Drive no conectado", "No se recibio codigo OAuth en el callback."));
+  }
+
+  try {
+    await driveManualSyncService.finishConnect(code);
+    return res
+      .status(200)
+      .type("html")
+      .send(renderOAuthResultPage("Drive conectado", "Ya puedes cerrar esta ventana y volver a la app."));
+  } catch (err) {
+    const status = err.status || 500;
+    const message = status === 403
+      ? "Correo no autorizado para esta aplicacion."
+      : `No se pudo completar la conexion de Drive: ${err.message || "error desconocido"}`;
+    return res.status(status).type("html").send(renderOAuthResultPage("Error conectando Drive", message));
+  }
+});
+
 router.post("/sync", requireAuth, requireRole("ADMIN"), async (req, res) => {
   try {
-    const out = await driveSyncService.runSync("manual");
+    const out = await driveManualSyncService.syncNow();
     res.json(out);
   } catch (err) {
     console.error("[drive.sync]", err);
-    res.status(500).json({ message: `Error sincronizando: ${err.message}` });
+    res.status(err.status || 500).json({ message: err.message || "Error sincronizando" });
   }
 });
 

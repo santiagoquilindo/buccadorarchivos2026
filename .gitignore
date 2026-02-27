@@ -16,6 +16,8 @@ token*.json
 credentials*.json
 *credential*.json
 client_secret*.json
+drive_tokens.json
+drive_cache/
 
 # Logs / OS
 *.log

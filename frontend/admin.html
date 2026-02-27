@@ -68,8 +68,10 @@
         <div id="zipMsg" class="msg"></div>
 
         <h2>Sincronizacion Drive</h2>
+        <div id="driveConnection" class="muted">Drive: verificando...</div>
         <div id="syncState" class="muted">Cargando estado...</div>
         <div class="actions">
+          <button id="btnConnectDrive" class="secondary">Conectar Drive</button>
           <button id="btnSyncNow">Sincronizar ahora</button>
         </div>
         <div id="syncMsg" class="msg"></div>
@@ -89,15 +91,18 @@
     const editorsMsg = document.getElementById("editorsMsg");
     const syncState = document.getElementById("syncState");
     const syncMsg = document.getElementById("syncMsg");
+    const driveConnection = document.getElementById("driveConnection");
 
     const btnCreate = document.getElementById("btnCreate");
     const btnImport = document.getElementById("btnImport");
     const btnReindex = document.getElementById("btnReindex");
     const btnEditors = document.getElementById("btnEditors");
     const btnSyncNow = document.getElementById("btnSyncNow");
+    const btnConnectDrive = document.getElementById("btnConnectDrive");
     const themeToggle = document.getElementById("themeToggle");
     const editorEmailsInput = document.getElementById("editorEmails");
     const editorEmailsCurrent = document.getElementById("editorEmailsCurrent");
+    let driveConnected = false;
 
     const THEME_KEY = "inventario_theme";
     function applyTheme(theme) {
@@ -147,10 +152,26 @@
       try {
         const data = await apiJson("/api/drive/status");
         const last = data.lastSyncAt ? new Date(data.lastSyncAt).toLocaleString() : "Nunca";
-        syncState.textContent = `Ultima sincronizacion: ${last} | Archivos indexados: ${data.indexed?.active_files ?? 0} | Cambios aplicados: ${data.lastChangesApplied ?? 0} | Filas Drive indexadas: ${data.lastDriveRowsIndexed ?? 0}`;
+        driveConnected = !!data.connected;
+        const email = data.email ? ` (${data.email})` : "";
+        driveConnection.textContent = `Drive: ${driveConnected ? "Conectado" : "No conectado"}${email}`;
+        syncState.textContent = `Ultima sincronizacion manual: ${last}`;
+        btnConnectDrive.textContent = driveConnected ? "Reconectar Drive" : "Conectar Drive";
       } catch (e) {
+        driveConnected = false;
+        driveConnection.textContent = "Drive: estado no disponible";
         syncState.textContent = `Estado no disponible: ${e.message}`;
       }
+    }
+
+    async function waitForDriveConnected(timeoutMs = 60000) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        await loadSyncStatus();
+        if (driveConnected) return true;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      return false;
     }
 
     loadEditorEmails();
@@ -290,13 +311,42 @@
         btnReindex.textContent = "Reindexar (borrar + importar)";
       }
     });
+    btnConnectDrive.addEventListener("click", async () => {
+      setMsg(syncMsg, "", "");
+      btnConnectDrive.disabled = true;
+      btnConnectDrive.textContent = "Conectando...";
+      try {
+        const start = await apiJson("/api/drive/connect/start", { method: "POST" });
+        window.open(start.url, "_blank");
+        setMsg(syncMsg, "Esperando confirmacion de Google...", "");
+        const connected = await waitForDriveConnected(60000);
+        if (!connected) {
+          throw new Error("No se completo la conexion, revisa la ventana del navegador.");
+        }
+        setMsg(syncMsg, "Drive conectado correctamente.", "ok");
+      } catch (e) {
+        setMsg(syncMsg, e.message, "error");
+      } finally {
+        btnConnectDrive.disabled = false;
+        btnConnectDrive.textContent = driveConnected ? "Reconectar Drive" : "Conectar Drive";
+      }
+    });
+
     btnSyncNow.addEventListener("click", async () => {
+      if (!driveConnected) {
+        setMsg(syncMsg, "Drive no conectado. Usa 'Conectar Drive' primero.", "error");
+        return;
+      }
       btnSyncNow.disabled = true;
       btnSyncNow.textContent = "Sincronizando...";
       setMsg(syncMsg, "", "");
       try {
         const out = await apiJson("/api/drive/sync", { method: "POST" });
-        setMsg(syncMsg, `Sync OK | Cambios aplicados: ${out.changesApplied ?? 0}`, "ok");
+        setMsg(
+          syncMsg,
+          `Sync OK | descargados: ${out.downloaded ?? 0} | actualizados: ${out.updated ?? 0} | borrados: ${out.deleted ?? 0} | omitidos: ${out.skipped ?? 0}`,
+          "ok"
+        );
         loadSyncStatus();
       } catch (e) {
         setMsg(syncMsg, e.message, "error");

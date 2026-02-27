@@ -22,7 +22,6 @@
         "cors": "^2.8.6",
         "express": "^5.2.1",
         "googleapis": "^140.0.1",
-        "inventario-login-local": "file:..",
         "jsonwebtoken": "^9.0.3",
         "multer": "^2.0.2",
         "xlsx": "^0.18.5"

@@ -73,6 +73,7 @@
         <div class="actions">
           <button id="btnConnectDrive" class="secondary">Conectar Drive</button>
           <button id="btnSyncNow">Sincronizar ahora</button>
+          <button id="btnReindexDrive" class="secondary">Reindexar Drive (lento)</button>
         </div>
         <div id="syncMsg" class="msg"></div>
 
@@ -98,6 +99,7 @@
     const btnReindex = document.getElementById("btnReindex");
     const btnEditors = document.getElementById("btnEditors");
     const btnSyncNow = document.getElementById("btnSyncNow");
+    const btnReindexDrive = document.getElementById("btnReindexDrive");
     const btnConnectDrive = document.getElementById("btnConnectDrive");
     const themeToggle = document.getElementById("themeToggle");
     const editorEmailsInput = document.getElementById("editorEmails");
@@ -345,13 +347,14 @@
         return;
       }
       btnSyncNow.disabled = true;
+      btnReindexDrive.disabled = true;
       btnSyncNow.textContent = "Sincronizando...";
       setMsg(syncMsg, "", "");
       try {
         const out = await apiJson("/api/drive/sync", { method: "POST" });
         setMsg(
           syncMsg,
-          `Sync OK | descargados: ${out.downloaded ?? 0} | actualizados: ${out.updated ?? 0} | borrados: ${out.deleted ?? 0} | omitidos: ${out.skipped ?? 0}`,
+          `Sync incremental OK | descargados: ${out.downloaded ?? 0} | actualizados: ${out.updated ?? 0} | borrados: ${out.deleted ?? 0} | omitidos: ${out.skipped ?? 0}`,
           "ok"
         );
         loadSyncStatus();
@@ -359,7 +362,37 @@
         setMsg(syncMsg, e.message, "error");
       } finally {
         btnSyncNow.disabled = false;
+        btnReindexDrive.disabled = false;
         btnSyncNow.textContent = "Sincronizar ahora";
+      }
+    });
+
+    btnReindexDrive.addEventListener("click", async () => {
+      if (!driveConnected) {
+        setMsg(syncMsg, "Drive no conectado. Usa 'Conectar Drive' primero.", "error");
+        return;
+      }
+      const ok = confirm("Esto reindexa Drive completo y puede tardar. Continuar?");
+      if (!ok) return;
+
+      btnSyncNow.disabled = true;
+      btnReindexDrive.disabled = true;
+      btnReindexDrive.textContent = "Reindexando...";
+      setMsg(syncMsg, "Reindexando Drive completo...", "");
+      try {
+        const out = await apiJson("/api/drive/reindex", { method: "POST" });
+        setMsg(
+          syncMsg,
+          `Reindex completo OK | descargados: ${out.downloaded ?? 0} | actualizados: ${out.updated ?? 0} | borrados: ${out.deleted ?? 0} | omitidos: ${out.skipped ?? 0}`,
+          "ok"
+        );
+        loadSyncStatus();
+      } catch (e) {
+        setMsg(syncMsg, e.message, "error");
+      } finally {
+        btnSyncNow.disabled = false;
+        btnReindexDrive.disabled = false;
+        btnReindexDrive.textContent = "Reindexar Drive (lento)";
       }
     });
 

@@ -92,10 +92,30 @@ router.get("/oauth2/callback", async (req, res) => {
 router.post("/sync", requireAuth, requireRole("ADMIN"), async (req, res) => {
   try {
     const out = await driveManualSyncService.syncNow();
-    res.json(out);
+    const indexed = await driveSyncService.runSync("manual");
+    res.json({
+      ...out,
+      indexedMode: indexed?.mode || "unknown",
+      indexedChanges: Number(indexed?.changesApplied || 0),
+    });
   } catch (err) {
     console.error("[drive.sync]", err);
     res.status(err.status || 500).json({ message: err.message || "Error sincronizando" });
+  }
+});
+
+router.post("/reindex", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  try {
+    const out = await driveManualSyncService.syncNow();
+    const indexed = await driveSyncService.runFullSync("manual-full");
+    res.json({
+      ...out,
+      indexedMode: indexed?.mode || "unknown",
+      indexedChanges: Number(indexed?.changesApplied || 0),
+    });
+  } catch (err) {
+    console.error("[drive.reindex]", err);
+    res.status(err.status || 500).json({ message: err.message || "Error reindexando Drive" });
   }
 });
 

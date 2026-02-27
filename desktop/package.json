@@ -56,7 +56,5 @@
             "deleteAppDataOnUninstall": false
         }
     },
-    "dependencies": {
-        "inventario-login-local": "file:.."
-    }
+    "dependencies": {}
 }

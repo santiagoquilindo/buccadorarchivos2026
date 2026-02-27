@@ -1,11 +1,18 @@
+# Node
 node_modules/
 **/node_modules/
+
+# Builds
 desktop/dist/
-**/dist/
 desktop/build/
+**/dist/
 **/build/
+
+# Env
 .env
 **/.env
+
+# Logs / OS
 *.log
-thumbs.db
+Thumbs.db
 .DS_Store

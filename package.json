@@ -7,7 +7,7 @@
                     "iniciar":  "npm --prefix desktop run dev",
                     "todo":  "npm run instalar \u0026\u0026 npm run iniciar",
                     "instalar-pc":  "npm run instalar \u0026\u0026 npm --prefix desktop run build",
-                    "build:win": "npm --prefix backend install \u0026\u0026 cd desktop \u0026\u0026 npm install \u0026\u0026 npm run build:win",
+                    "build:win": "npm --prefix backend install \u0026\u0026 npm --prefix desktop install \u0026\u0026 npm --prefix desktop run build:win",
                     "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
                 },
     "keywords":  [

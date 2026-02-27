@@ -5,6 +5,7 @@ const XLSX = require("xlsx");
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 let syncInFlight = null;
 
@@ -185,13 +186,16 @@ function indexLinesIntoEntries(fileId, lines, refDate) {
 }
 
 async function indexDriveSheetContent(client, file) {
-  if (String(file.mimeType || "") !== GOOGLE_SHEET_MIME) {
+  const mime = String(file.mimeType || "");
+  if (mime !== GOOGLE_SHEET_MIME && mime !== XLSX_MIME) {
     clearDriveEntriesByDriveFileId(file.id);
     return 0;
   }
 
   const fileId = upsertDriveFileRow(file);
-  const buf = await client.exportSheetAsXlsx(String(file.id));
+  const buf = mime === GOOGLE_SHEET_MIME
+    ? await client.exportSheetAsXlsx(String(file.id))
+    : await client.downloadFileAsBuffer(String(file.id));
   const wb = XLSX.read(buf, { type: "buffer" });
   const lines = workbookToLines(wb);
   const refDate = file.modifiedTime ? String(file.modifiedTime).slice(0, 10) : null;
@@ -245,7 +249,7 @@ async function bootstrapFromFolder(client, cfg) {
     upsertIndex(root);
     filesUpserted += 1;
   } catch (err) {
-    console.warn(`[driveSync] No se pudo leer carpeta raíz ${cfg.folderId}: ${err.message}`);
+    console.warn(`[driveSync] No se pudo leer carpeta raï¿½z ${cfg.folderId}: ${err.message}`);
   }
 
   while (queue.length) {
@@ -373,6 +377,11 @@ function runSync(trigger = "manual") {
   return syncInFlight;
 }
 
+async function runFullSync(trigger = "manual-full") {
+  clearState("drive.page_token");
+  return runSync(trigger);
+}
+
 async function ensureWatch() {
   const client = await buildDriveClient();
   const webhookAddress = String(process.env.DRIVE_WEBHOOK_URL || "").trim();
@@ -457,7 +466,10 @@ function getStatus() {
 
 module.exports = {
   runSync,
+  runFullSync,
   getStatus,
   ensureWatch,
   stopWatch,
 };
+
+

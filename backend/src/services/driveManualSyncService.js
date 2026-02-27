@@ -13,6 +13,7 @@ const OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
   "openid",
 ];
+const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 function makeError(status, message) {
   const err = new Error(message);
@@ -111,8 +112,8 @@ function exportMimeByType(mimeType) {
   return null;
 }
 
-async function listDriveFiles(drive, folderId) {
-  const files = [];
+async function listFolderChildren(drive, folderId) {
+  const items = [];
   let pageToken = null;
   do {
     const res = await drive.files.list({
@@ -123,9 +124,33 @@ async function listDriveFiles(drive, folderId) {
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     });
-    files.push(...(res.data.files || []));
+    items.push(...(res.data.files || []));
     pageToken = res.data.nextPageToken || null;
   } while (pageToken);
+  return items;
+}
+
+async function listDriveFilesRecursive(drive, rootFolderId) {
+  const files = [];
+  const queue = [rootFolderId];
+  const seenFolders = new Set([rootFolderId]);
+
+  while (queue.length) {
+    const folderId = queue.shift();
+    const children = await listFolderChildren(drive, folderId);
+    for (const child of children) {
+      if (!child || !child.id) continue;
+      if (child.mimeType === FOLDER_MIME) {
+        if (!seenFolders.has(child.id)) {
+          seenFolders.add(child.id);
+          queue.push(child.id);
+        }
+        continue;
+      }
+      files.push(child);
+    }
+  }
+
   return files;
 }
 
@@ -251,7 +276,7 @@ async function syncNow() {
   let updated = 0;
   let skipped = 0;
 
-  const driveFiles = await listDriveFiles(drive, folderId);
+  const driveFiles = await listDriveFilesRecursive(drive, folderId);
   for (const file of driveFiles) {
     if (!file?.id || !file?.name || file.trashed) {
       skipped += 1;

@@ -6,6 +6,7 @@ function getGoogleSdk() {
   }
 }
 const fs = require("fs");
+const { loadTokenData } = require("./driveTokenStore");
 
 const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"];
 
@@ -91,14 +92,23 @@ async function createAuthClient(cfg) {
   const clientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
   const clientSecret = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
   const redirectUri = String(process.env.GOOGLE_REDIRECT_URI || "").trim();
-  const refreshToken = String(process.env.GOOGLE_REFRESH_TOKEN || "").trim();
+  const tokenData = loadTokenData();
+  const refreshToken = String(
+    process.env.GOOGLE_REFRESH_TOKEN
+    || tokenData?.tokens?.refresh_token
+    || ""
+  ).trim();
 
   if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
     throw new Error("Configura GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI y GOOGLE_REFRESH_TOKEN");
   }
 
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-  oauth2.setCredentials({ refresh_token: refreshToken });
+  oauth2.setCredentials({
+    refresh_token: refreshToken,
+    access_token: tokenData?.tokens?.access_token || undefined,
+    expiry_date: tokenData?.tokens?.expiry_date || undefined,
+  });
   return oauth2;
 }
 
@@ -207,6 +217,20 @@ async function buildDriveClient() {
         "files.export"
       );
 
+      return Buffer.from(res.data);
+    },
+    async downloadFileAsBuffer(fileId) {
+      const res = await withRetry(
+        () => drive.files.get(
+          {
+            fileId,
+            alt: "media",
+            supportsAllDrives: true,
+          },
+          { responseType: "arraybuffer" }
+        ),
+        "files.get(media)"
+      );
       return Buffer.from(res.data);
     },
     async stopChannel(channelId, resourceId) {

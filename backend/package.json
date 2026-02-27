@@ -1,0 +1,33 @@
+{
+    "name": "backend",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+        "dev": "nodemon src/server.js",
+        "start": "node src/server.js",
+        "seed": "node src/db/seed.js",
+        "oauth:url": "node scripts/drive_oauth_url.js",
+        "oauth:token": "node scripts/drive_oauth_token.js",
+        "drive:sync": "node scripts/drive_sync_once.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "dependencies": {
+        "adm-zip": "^0.5.16",
+        "bcryptjs": "^3.0.3",
+        "better-sqlite3": "^12.6.2",
+        "cookie-parser": "^1.4.7",
+        "cors": "^2.8.6",
+        "express": "^5.2.1",
+        "googleapis": "^140.0.1",
+        "inventario-login-local": "file:..",
+        "jsonwebtoken": "^9.0.3",
+        "multer": "^2.0.2",
+        "xlsx": "^0.18.5"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.14"
+    }
+}

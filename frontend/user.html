@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buscador</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="brand-row">
+      <div class="logo-badge"><img src="assets/logo-sag.png" alt="Logo SAG" class="logo-image" /></div>
+    </div>
+    <div class="topbar">
+      <h1>Buscador</h1>
+      <button type="button" id="themeToggle" class="theme-toggle" aria-label="Cambiar tema" title="Cambiar tema">&#9728;</button>
+    </div>
+    <p class="muted">Busca por palabra o frase.</p>
+
+    <label>Texto</label>
+    <input id="q" list="searchSuggestions" placeholder="Ej: 2022, contabilidad, gabinete 2" />
+    <datalist id="searchSuggestions"></datalist>
+
+    <button id="btnSearch">Buscar</button>
+    <div id="results" class="msg" style="margin-top:14px">Sin resultados.</div>
+
+    <hr />
+
+    <h2>Agregar registro</h2>
+    <p class="muted">Las palabras nuevas que agregues quedaran disponibles para futuras busquedas.</p>
+    <button id="btnShowAdd">Agregar registro</button>
+
+    <div id="addFormPanel" style="display:none">
+      <label>Archivo asociado (opcional)</label>
+      <select id="fileSelect">
+        <option value="">(Sin archivo)</option>
+      </select>
+
+      <label>Descripcion *</label>
+      <textarea id="desc" rows="3" placeholder="Ej: Contabilidad SAG enero-diciembre 2022"></textarea>
+
+      <label>Fecha (opcional)</label>
+      <input id="date" placeholder="2022-01-01" />
+
+      <label>Sector (puedes crear uno nuevo)</label>
+      <input id="sector" list="sectorOptions" placeholder="Ej: Estante 1 / Seccion 5 / Caja 12" />
+      <datalist id="sectorOptions"></datalist>
+
+      <label>Palabras clave (opcional)</label>
+      <input id="keys" placeholder="SAG, contabilidad, 2022" />
+
+      <div class="actions">
+        <button id="btnAdd">Guardar registro</button>
+        <button id="btnCancelAdd" type="button" class="secondary">Cancelar</button>
+      </div>
+    </div>
+
+    <hr />
+
+    <div class="actions">
+      <button id="open">Abrir carpeta en Drive</button>
+      <button class="secondary" id="logout">Salir</button>
+    </div>
+
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <script>
+    let canEdit = false;
+    const results = document.getElementById("results");
+    const msg = document.getElementById("msg");
+    const btnSearch = document.getElementById("btnSearch");
+    const btnAdd = document.getElementById("btnAdd");
+    const btnShowAdd = document.getElementById("btnShowAdd");
+    const btnCancelAdd = document.getElementById("btnCancelAdd");
+    const addFormPanel = document.getElementById("addFormPanel");
+    const themeToggle = document.getElementById("themeToggle");
+    let lastQuery = "";
+    const expandedIds = new Set();
+    let suggestTimer = null;
+
+    const THEME_KEY = "inventario_theme";
+    function applyTheme(theme) {
+      document.body.classList.toggle("theme-dark", theme === "dark");
+      themeToggle.innerHTML = theme === "dark" ? "&#127769;" : "&#9728;";
+      themeToggle.title = theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+      themeToggle.setAttribute("aria-label", themeToggle.title);
+    }
+    const initialTheme = localStorage.getItem(THEME_KEY) || "light";
+    applyTheme(initialTheme);
+    themeToggle.addEventListener("click", () => {
+      const next = document.body.classList.contains("theme-dark") ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    });
+
+    function setMsg(el, text, type) {
+      el.textContent = text || "";
+      el.className = "msg" + (type ? " " + type : "");
+    }
+
+    async function apiJson(url, opts = {}) {
+      const res = await fetch(url, { credentials: "include", ...opts });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Error");
+      return data;
+    }
+
+    async function loadPermissions() {
+      try {
+        const data = await apiJson("/api/app/permissions");
+        canEdit = !!data.can_edit;
+      } catch {
+        canEdit = false;
+      }
+    }
+
+    async function loadFiles() {
+      try {
+        const files = await apiJson("/api/app/files");
+        const sel = document.getElementById("fileSelect");
+        files.forEach((f) => {
+          const opt = document.createElement("option");
+          opt.value = f.id;
+          opt.textContent = `#${f.id} - ${f.title}${f.cabinet ? " (" + f.cabinet + ")" : ""}`;
+          sel.appendChild(opt);
+        });
+      } catch {}
+    }
+
+    async function loadSectors() {
+      try {
+        const sectors = await apiJson("/api/app/sectors");
+        const list = document.getElementById("sectorOptions");
+        list.innerHTML = sectors.map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
+      } catch {}
+    }
+
+    loadPermissions();
+    loadFiles();
+    loadSectors();
+
+    function clearAddForm() {
+      document.getElementById("desc").value = "";
+      document.getElementById("date").value = "";
+      document.getElementById("sector").value = "";
+      document.getElementById("keys").value = "";
+      document.getElementById("fileSelect").value = "";
+    }
+
+    btnShowAdd.addEventListener("click", () => {
+      addFormPanel.style.display = "block";
+      btnShowAdd.style.display = "none";
+    });
+
+    btnCancelAdd.addEventListener("click", () => {
+      clearAddForm();
+      addFormPanel.style.display = "none";
+      btnShowAdd.style.display = "block";
+      setMsg(msg, "", "");
+    });
+
+    async function doSearch() {
+      setMsg(msg, "", "");
+      const q = document.getElementById("q").value.trim();
+      lastQuery = q;
+
+      if (!q) {
+        results.textContent = "Escribe texto para buscar.";
+        return;
+      }
+
+      btnSearch.disabled = true;
+      btnSearch.textContent = "Buscando...";
+      results.className = "msg";
+      results.textContent = "Buscando...";
+
+      try {
+        const params = new URLSearchParams();
+        params.set("q", q);
+
+        const rows = await apiJson(`/api/app/search?${params.toString()}`);
+        if (!rows.length) {
+          results.textContent = "Sin resultados.";
+          return;
+        }
+
+        lastRowsById.clear();
+        const grouped = groupBySector(rows);
+        results.innerHTML = grouped.map((g) => {
+          const items = g.rows.map((r) => {
+            const meta = [
+              r.ref_date || r.file_date || null,
+              r.cabinet || null,
+              r.location || null
+            ].filter(Boolean).join(" | ");
+
+            const fullText = String(r.keywords || r.description || "");
+            const locInfo = extractLocationInfo(r, fullText, lastQuery);
+            const isExpanded = expandedIds.has(r.id);
+            const preview = isExpanded ? fullText : fullText.slice(0, 280);
+            const actions = `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="toggleDetails(${r.id})" style="margin:0;padding:8px 10px;width:auto">${isExpanded ? "Ver menos" : "Ver mas"}</button>
+              ${r.drive_url ? `<button onclick="openEntry(${r.id}, 'view')" style="margin:0;padding:8px 10px;width:auto">Abrir en Drive</button>` : ""}
+              ${r.drive_url && canEdit ? `<button onclick="openEntry(${r.id}, 'edit')" style="margin:0;padding:8px 10px;width:auto">Editar en Drive</button>` : ""}
+              <button onclick="copyLocation(${r.id})" style="margin:0;padding:8px 10px;width:auto">Copiar ubicacion</button>
+            </div>`;
+
+            return `
+              <div style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px">
+                <div><b>${highlightHtml(escapeHtml(r.description || ""), lastQuery)}</b></div>
+                ${meta ? `<div style="opacity:.8;font-size:13px;margin-top:4px">${escapeHtml(meta)}</div>` : ""}
+                <div style="margin-top:6px;font-size:14px"><b>Ubicacion:</b> ${locInfo.labelHtml}</div>
+                ${preview ? `<div style="opacity:.92;margin-top:6px;font-size:13px">${highlightHtml(escapeHtml(preview), lastQuery)}${!isExpanded && fullText.length > 280 ? "..." : ""}</div>` : ""}
+                ${r.file_title ? `<div style="opacity:.85;margin-top:6px">Archivo: ${escapeHtml(r.file_title)}</div>` : ""}
+                ${actions}
+              </div>
+            `;
+          }).join("");
+
+          return `
+            <div style="margin:12px 0 18px">
+              <div style="font-weight:700;opacity:.95">Sector: ${escapeHtml(g.sector)}</div>
+              ${items}
+            </div>
+          `;
+        }).join("");
+      } catch (e) {
+        results.textContent = e.message;
+        results.className = "msg error";
+      } finally {
+        btnSearch.disabled = false;
+        btnSearch.textContent = "Buscar";
+      }
+    }
+
+    document.getElementById("btnSearch").addEventListener("click", doSearch);
+    const qInput = document.getElementById("q");
+    qInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doSearch();
+    });
+    qInput.addEventListener("input", () => {
+      if (suggestTimer) clearTimeout(suggestTimer);
+      suggestTimer = setTimeout(loadSearchSuggestions, 180);
+    });
+
+    async function openEntry(entryId, mode) {
+      try {
+        const data = await apiJson(
+          `/api/app/entries/${entryId}/open?mode=${encodeURIComponent(mode)}&q=${encodeURIComponent(lastQuery || "")}`
+        );
+        window.open(data.url, "_blank");
+        if (!data.highlight_applied && lastQuery) {
+          setMsg(msg, "Drive no subraya automaticamente en este tipo de archivo. Usa Ctrl+F en la ventana que abre.", "ok");
+        }
+      } catch (e) {
+        setMsg(msg, e.message, "error");
+      }
+    }
+    window.openEntry = openEntry;
+
+    function toggleDetails(entryId) {
+      if (expandedIds.has(entryId)) expandedIds.delete(entryId);
+      else expandedIds.add(entryId);
+      doSearch();
+    }
+    window.toggleDetails = toggleDetails;
+
+    function copyLocation(entryId) {
+      const card = lastRowsById.get(entryId);
+      if (!card) return;
+      const text = card.locationText || "Sin ubicacion";
+      navigator.clipboard.writeText(text)
+        .then(() => setMsg(msg, `Ubicacion copiada: ${text}`, "ok"))
+        .catch(() => setMsg(msg, "No se pudo copiar la ubicacion.", "error"));
+    }
+    window.copyLocation = copyLocation;
+
+    btnAdd.addEventListener("click", async () => {
+      setMsg(msg, "", "");
+      const description = document.getElementById("desc").value.trim();
+      if (!description) return setMsg(msg, "La descripcion es obligatoria.", "error");
+
+      btnAdd.disabled = true;
+      btnAdd.textContent = "Guardando...";
+
+      try {
+        const fileIdRaw = document.getElementById("fileSelect").value;
+        const payload = {
+          file_id: fileIdRaw ? Number(fileIdRaw) : null,
+          ref_date: document.getElementById("date").value.trim() || null,
+          location: document.getElementById("sector").value.trim() || null,
+          description,
+          keywords: document.getElementById("keys").value.trim() || null
+        };
+
+        await apiJson("/api/app/entries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        setMsg(msg, "Registro guardado.", "ok");
+        clearAddForm();
+        loadSectors();
+        addFormPanel.style.display = "none";
+        btnShowAdd.style.display = "block";
+      } catch (e) {
+        setMsg(msg, e.message, "error");
+      } finally {
+        btnAdd.disabled = false;
+        btnAdd.textContent = "Guardar registro";
+      }
+    });
+
+    document.getElementById("open").addEventListener("click", async () => {
+      setMsg(msg, "", "");
+      try {
+        const data = await apiJson("/api/app/drive-folder");
+        window.open(data.url, "_blank");
+      } catch (e) {
+        setMsg(msg, e.message, "error");
+      }
+    });
+
+    document.getElementById("logout").addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      location.href = "/login.html";
+    });
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function groupBySector(rows) {
+      const map = new Map();
+      for (const row of rows) {
+        const sector = row.location || row.cabinet || "Sin sector";
+        if (!map.has(sector)) map.set(sector, []);
+        map.get(sector).push(row);
+      }
+      return Array.from(map.entries()).map(([sector, sectorRows]) => ({ sector, rows: sectorRows }));
+    }
+
+    const lastRowsById = new Map();
+
+    function extractLocationInfo(row, fullText, query) {
+      const text = String(fullText || "");
+      const parts = text.split("|").map((p) => p.trim()).filter(Boolean);
+      const qTokens = tokenize(query).filter((t) => !/^(\d+[a-z]|[a-z]\d+|\d+)$/i.test(t));
+      const refTerms = tokenize(query).filter((t) => /^(\d+[a-z]|[a-z]\d+)$/i.test(t)).map((t) => t.toUpperCase());
+
+      const matchedIndexes = [];
+      if (qTokens.length) {
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          const hasTerm = qTokens.some((t) => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(p));
+          if (hasTerm) matchedIndexes.push(i);
+        }
+      }
+
+      let folder = null;
+      if (matchedIndexes.length) {
+        for (const idx of matchedIndexes) {
+          const m = parts[idx].match(/^(\d+(?:\.\d+)?)(?:\s+|$)/);
+          if (m) {
+            folder = m[1];
+            break;
+          }
+        }
+      }
+      if (!folder) {
+        for (const p of parts) {
+          const m = p.match(/^(\d+(?:\.\d+)?)(?:\s+|$)/);
+          if (m) {
+            folder = m[1];
+            break;
+          }
+        }
+      }
+
+      let ref = null;
+      if (refTerms.length) {
+        ref = refTerms[0];
+      } else if (matchedIndexes.length) {
+        // Prefer references in or nearest before the matched segment.
+        const firstMatchIdx = matchedIndexes[0];
+        const inSame = parts[firstMatchIdx].match(/\b(\d+[a-z]|[a-z]\d+)\b/i);
+        if (inSame) {
+          ref = inSame[1].toUpperCase();
+        } else {
+          for (let i = firstMatchIdx - 1; i >= 0; i--) {
+            const m = parts[i].match(/\b(\d+[a-z]|[a-z]\d+)\b/i);
+            if (m) {
+              ref = m[1].toUpperCase();
+              break;
+            }
+          }
+        }
+      }
+      if (!ref) {
+        const m = text.match(/\b(\d+[a-z]|[a-z]\d+)\b/i);
+        ref = m ? m[1].toUpperCase() : null;
+      }
+
+      const pieces = [];
+      if (row.cabinet) pieces.push(escapeHtml(row.cabinet));
+      if (ref) pieces.push(`Referencia <mark class="mark-ref">${escapeHtml(ref)}</mark>`);
+      if (folder) pieces.push(`Folder <mark class="mark-ref">${escapeHtml(folder)}</mark>`);
+
+      const label = pieces.length
+        ? pieces.map((p) => p.replace(/<[^>]+>/g, "")).join(" | ")
+        : "Sin ubicacion estructurada";
+      const labelHtml = pieces.length ? pieces.join(" | ") : escapeHtml(label);
+
+      lastRowsById.set(row.id, { locationText: label });
+      return { label, labelHtml };
+    }
+
+    function tokenize(text) {
+      const parts = String(text || "")
+        .toLowerCase()
+        .match(/[a-z0-9]+/gi) || [];
+      return [...new Set(parts)];
+    }
+
+    function highlightHtml(htmlSafeText, query) {
+      let out = htmlSafeText;
+      const terms = tokenize(query);
+      if (!terms.length) return out;
+      const refTerms = terms.filter((t) => /^(\d+[a-z]|[a-z]\d+|\d+)$/i.test(t));
+      const textTerms = terms.filter((t) => !/^(\d+[a-z]|[a-z]\d+|\d+)$/i.test(t));
+
+      // 1) If user searches explicit references (e.g. 2b), highlight only those exact references.
+      for (const t of refTerms) {
+        const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        out = out.replace(new RegExp(`\\b(${esc})\\b`, "ig"), '<mark class="mark-ref">$1</mark>');
+      }
+
+      // 2) Highlight searched words.
+      for (const t of textTerms) {
+        const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        out = out.replace(new RegExp(`\\b(${esc})\\b`, "ig"), '<mark class="mark-search">$1</mark>');
+      }
+
+      // 3) Highlight only folder number of the matched segment(s), not all document numbers.
+      if (textTerms.length) {
+        out = out.replace(/(^|\|)([^|]+)/g, (full, sep, segment) => {
+          const hasTerm = textTerms.some((t) => {
+            const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            return new RegExp(`\\b${esc}\\b`, "i").test(segment);
+          });
+          if (!hasTerm) return full;
+
+          const updated = segment.replace(/^(\s*)(\d+(?:\.\d+)?)(?=\s|$)/, '$1<mark class="mark-ref">$2</mark>');
+          return `${sep}${updated}`;
+        });
+      }
+
+      return out;
+    }
+
+    async function loadSearchSuggestions() {
+      const q = qInput.value.trim();
+      const list = document.getElementById("searchSuggestions");
+      if (q.length < 2) {
+        list.innerHTML = "";
+        return;
+      }
+      try {
+        const items = await apiJson(`/api/app/suggest?q=${encodeURIComponent(q)}`);
+        list.innerHTML = items.map((s) => `<option value="${escapeHtml(String(s))}"></option>`).join("");
+      } catch {
+        list.innerHTML = "";
+      }
+    }
+  </script>
+</body>
+</html>
+
+
+

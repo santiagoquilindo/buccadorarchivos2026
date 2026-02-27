@@ -1,0 +1,11 @@
+node_modules/
+**/node_modules/
+desktop/dist/
+**/dist/
+desktop/build/
+**/build/
+.env
+**/.env
+*.log
+thumbs.db
+.DS_Store

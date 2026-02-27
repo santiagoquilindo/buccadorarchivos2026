@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="brand-row">
+      <div class="logo-badge"><img src="assets/logo-sag.png" alt="Logo SAG" class="logo-image" /></div>
+    </div>
+    <div class="topbar">
+      <h1>Panel Admin</h1>
+      <button type="button" id="themeToggle" class="theme-toggle" aria-label="Cambiar tema" title="Cambiar tema">&#9728;</button>
+    </div>
+
+    <div class="grid2">
+      <section>
+        <h2>Crear usuario</h2>
+        <form id="create">
+          <label>Nombre</label>
+          <input id="name" required />
+
+          <label>Usuario</label>
+          <input id="username" required placeholder="ej: isabella.victoria" />
+
+          <label>Correo</label>
+          <input id="email" type="email" placeholder="ej: persona@dominio.com" />
+
+          <label>Contrasena</label>
+          <input id="password" type="password" required />
+
+          <label>Rol</label>
+          <select id="role">
+            <option value="USER">USER</option>
+            <option value="ADMIN">ADMIN</option>
+          </select>
+
+          <button id="btnCreate" type="submit">Crear</button>
+          <div id="msg" class="msg"></div>
+        </form>
+
+        <hr />
+
+        <h2>Correos editores</h2>
+        <p class="muted">Solo estos correos podran usar el boton "Editar en Drive".</p>
+        <label>Correos (separados por coma)</label>
+        <textarea id="editorEmails" rows="3" placeholder="editor1@dominio.com, editor2@dominio.com"></textarea>
+        <div id="editorEmailsCurrent" class="muted"></div>
+        <button id="btnEditors">Guardar correos editores</button>
+        <div id="editorsMsg" class="msg"></div>
+      </section>
+
+      <section>
+        <h2>Importar ZIP (Excel)</h2>
+        <p class="muted" style="margin-top:-6px">Importa un ZIP con archivos .xlsx/.xlsm para indexar.</p>
+
+        <label>Archivo ZIP</label>
+        <input type="file" id="zipFile" accept=".zip" />
+
+        <div class="actions">
+          <button id="btnImport">Importar (agregar)</button>
+          <button id="btnReindex" class="danger">Reindexar (borrar + importar)</button>
+        </div>
+
+        <div id="zipMsg" class="msg"></div>
+
+        <h2>Sincronizacion Drive</h2>
+        <div id="syncState" class="muted">Cargando estado...</div>
+        <div class="actions">
+          <button id="btnSyncNow">Sincronizar ahora</button>
+        </div>
+        <div id="syncMsg" class="msg"></div>
+
+        <hr />
+        <button id="open">Abrir carpeta en Drive</button>
+        <button class="secondary" id="logout">Salir</button>
+        <div id="msg2" class="msg"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const msg2 = document.getElementById("msg2");
+    const zipMsg = document.getElementById("zipMsg");
+    const editorsMsg = document.getElementById("editorsMsg");
+    const syncState = document.getElementById("syncState");
+    const syncMsg = document.getElementById("syncMsg");
+
+    const btnCreate = document.getElementById("btnCreate");
+    const btnImport = document.getElementById("btnImport");
+    const btnReindex = document.getElementById("btnReindex");
+    const btnEditors = document.getElementById("btnEditors");
+    const btnSyncNow = document.getElementById("btnSyncNow");
+    const themeToggle = document.getElementById("themeToggle");
+    const editorEmailsInput = document.getElementById("editorEmails");
+    const editorEmailsCurrent = document.getElementById("editorEmailsCurrent");
+
+    const THEME_KEY = "inventario_theme";
+    function applyTheme(theme) {
+      document.body.classList.toggle("theme-dark", theme === "dark");
+      themeToggle.innerHTML = theme === "dark" ? "&#127769;" : "&#9728;";
+      themeToggle.title = theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+      themeToggle.setAttribute("aria-label", themeToggle.title);
+    }
+    const initialTheme = localStorage.getItem(THEME_KEY) || "light";
+    applyTheme(initialTheme);
+    themeToggle.addEventListener("click", () => {
+      const next = document.body.classList.contains("theme-dark") ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    });
+
+    function setMsg(el, text, type) {
+      el.textContent = text || "";
+      el.className = "msg" + (type ? " " + type : "");
+    }
+
+    function normUsername(u) {
+      return (u || "").trim().replace(/\s+/g, " ");
+    }
+
+    async function apiJson(url, opts = {}) {
+      const res = await fetch(url, { credentials: "include", ...opts });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Error");
+      return data;
+    }
+
+    async function loadEditorEmails() {
+      try {
+        const data = await apiJson("/api/admin/editor-emails");
+        const list = Array.isArray(data.editor_emails) ? data.editor_emails : [];
+        editorEmailsInput.value = list.join(", ");
+        editorEmailsCurrent.textContent = list.length
+          ? `Actuales: ${list.join(", ")}`
+          : "Actuales: (sin correos configurados)";
+      } catch {
+        editorEmailsCurrent.textContent = "No se pudieron cargar los correos actuales.";
+      }
+    }
+
+    async function loadSyncStatus() {
+      try {
+        const data = await apiJson("/api/drive/status");
+        const last = data.lastSyncAt ? new Date(data.lastSyncAt).toLocaleString() : "Nunca";
+        syncState.textContent = `Ultima sincronizacion: ${last} | Archivos indexados: ${data.indexed?.active_files ?? 0} | Cambios aplicados: ${data.lastChangesApplied ?? 0} | Filas Drive indexadas: ${data.lastDriveRowsIndexed ?? 0}`;
+      } catch (e) {
+        syncState.textContent = `Estado no disponible: ${e.message}`;
+      }
+    }
+
+    loadEditorEmails();
+    loadSyncStatus();
+
+    document.getElementById("create").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setMsg(msg, "", "");
+      btnCreate.disabled = true;
+      btnCreate.textContent = "Creando...";
+
+      try {
+        const payload = {
+          name: document.getElementById("name").value.trim(),
+          username: normUsername(document.getElementById("username").value),
+          email: document.getElementById("email").value.trim().toLowerCase() || null,
+          password: document.getElementById("password").value,
+          role: document.getElementById("role").value
+        };
+
+        if (!payload.name || !payload.username || !payload.password) {
+          setMsg(msg, "Completa nombre, usuario y contrasena.", "error");
+          return;
+        }
+
+        await apiJson("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        setMsg(msg, "Usuario creado.", "ok");
+        e.target.reset();
+      } catch (err) {
+        setMsg(msg, err.message, "error");
+      } finally {
+        btnCreate.disabled = false;
+        btnCreate.textContent = "Crear";
+      }
+    });
+
+    btnEditors.addEventListener("click", async () => {
+      setMsg(editorsMsg, "", "");
+      btnEditors.disabled = true;
+      btnEditors.textContent = "Guardando...";
+      try {
+        const emails = editorEmailsInput.value
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
+        const data = await apiJson("/api/admin/editor-emails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emails })
+        });
+        loadEditorEmails();
+        setMsg(editorsMsg, `Guardado: ${data.editor_emails.join(", ")}`, "ok");
+      } catch (e) {
+        setMsg(editorsMsg, e.message, "error");
+      } finally {
+        btnEditors.disabled = false;
+        btnEditors.textContent = "Guardar correos editores";
+      }
+    });
+
+    btnImport.addEventListener("click", async () => {
+      setMsg(zipMsg, "", "");
+      const f = document.getElementById("zipFile").files[0];
+      if (!f) return setMsg(zipMsg, "Selecciona un archivo .zip", "error");
+
+      btnImport.disabled = true;
+      btnReindex.disabled = true;
+      btnImport.textContent = "Importando...";
+
+      try {
+        const form = new FormData();
+        form.append("file", f);
+
+        const res = await fetch("/api/import/zip", {
+          method: "POST",
+          credentials: "include",
+          body: form
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Error importando ZIP");
+
+        setMsg(
+          zipMsg,
+          `Importacion completa. Archivos: ${data.files_indexed ?? "-"} | Registros: ${data.entries_inserted ?? "-"}`,
+          "ok"
+        );
+      } catch (err) {
+        setMsg(zipMsg, err.message, "error");
+      } finally {
+        btnImport.disabled = false;
+        btnReindex.disabled = false;
+        btnImport.textContent = "Importar (agregar)";
+      }
+    });
+
+    btnReindex.addEventListener("click", async () => {
+      setMsg(zipMsg, "", "");
+      const f = document.getElementById("zipFile").files[0];
+      if (!f) return setMsg(zipMsg, "Selecciona un archivo .zip", "error");
+
+      const ok = confirm("Esto borrara el indice local y lo reconstruira desde el ZIP. Continuar?");
+      if (!ok) return;
+
+      btnImport.disabled = true;
+      btnReindex.disabled = true;
+      btnReindex.textContent = "Reindexando...";
+
+      try {
+        const form = new FormData();
+        form.append("file", f);
+
+        const res = await fetch("/api/import/reindex-zip", {
+          method: "POST",
+          credentials: "include",
+          body: form
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Error reindexando ZIP");
+
+        setMsg(
+          zipMsg,
+          `Reindexado completo. Archivos: ${data.files_indexed ?? "-"} | Registros: ${data.entries_inserted ?? "-"}`,
+          "ok"
+        );
+      } catch (err) {
+        setMsg(zipMsg, err.message, "error");
+      } finally {
+        btnImport.disabled = false;
+        btnReindex.disabled = false;
+        btnReindex.textContent = "Reindexar (borrar + importar)";
+      }
+    });
+    btnSyncNow.addEventListener("click", async () => {
+      btnSyncNow.disabled = true;
+      btnSyncNow.textContent = "Sincronizando...";
+      setMsg(syncMsg, "", "");
+      try {
+        const out = await apiJson("/api/drive/sync", { method: "POST" });
+        setMsg(syncMsg, `Sync OK | Cambios aplicados: ${out.changesApplied ?? 0}`, "ok");
+        loadSyncStatus();
+      } catch (e) {
+        setMsg(syncMsg, e.message, "error");
+      } finally {
+        btnSyncNow.disabled = false;
+        btnSyncNow.textContent = "Sincronizar ahora";
+      }
+    });
+
+    document.getElementById("open").addEventListener("click", async () => {
+      setMsg(msg2, "", "");
+      try {
+        const data = await apiJson("/api/app/drive-folder");
+        window.open(data.url, "_blank");
+      } catch (err) {
+        setMsg(msg2, err.message, "error");
+      }
+    });
+
+    document.getElementById("logout").addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      location.href = "/login.html";
+    });
+  </script>
+</body>
+</html>
+
+
+
+
+
+

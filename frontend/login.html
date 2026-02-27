@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Acceso</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="brand-row">
+      <div class="logo-badge"><img src="assets/logo-sag.png" alt="Logo SAG" class="logo-image" /></div>
+    </div>
+    <div class="topbar">
+      <h1>Acceso</h1>
+      <button type="button" id="themeToggle" class="theme-toggle" aria-label="Cambiar tema" title="Cambiar tema">&#9728;</button>
+    </div>
+    <p class="muted">Inventario del archivo</p>
+
+    <form id="form" autocomplete="on">
+      <label>Usuario o correo</label>
+      <input id="username" autocomplete="username" required />
+
+      <label>Contrasena</label>
+      <div class="row">
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button type="button" class="btn-icon" id="togglePass" aria-label="Mostrar u ocultar contrasena">O</button>
+      </div>
+
+      <button id="btn" type="submit">Entrar</button>
+      <div id="msg" class="msg"></div>
+
+      <div class="hint">
+        <div><b>Admin:</b> admin / Admin123*</div>
+        <div><b>Usuario:</b> user1 / User123*</div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById("form");
+    const msg = document.getElementById("msg");
+    const btn = document.getElementById("btn");
+    const togglePass = document.getElementById("togglePass");
+    const passwordInput = document.getElementById("password");
+    const usernameInput = document.getElementById("username");
+    const themeToggle = document.getElementById("themeToggle");
+
+    window.addEventListener("load", () => usernameInput.focus());
+
+    const THEME_KEY = "inventario_theme";
+    function applyTheme(theme) {
+      document.body.classList.toggle("theme-dark", theme === "dark");
+      themeToggle.innerHTML = theme === "dark" ? "&#127769;" : "&#9728;";
+      themeToggle.title = theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+      themeToggle.setAttribute("aria-label", themeToggle.title);
+    }
+    const initialTheme = localStorage.getItem(THEME_KEY) || "light";
+    applyTheme(initialTheme);
+    themeToggle.addEventListener("click", () => {
+      const next = document.body.classList.contains("theme-dark") ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    });
+
+    togglePass.addEventListener("click", () => {
+      passwordInput.type = passwordInput.type === "password" ? "text" : "password";
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.textContent = "";
+      msg.className = "msg";
+
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value;
+
+      if (!username || !password) {
+        msg.textContent = "Completa usuario/correo y contrasena.";
+        msg.className = "msg error";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Validando...";
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          msg.textContent = data.message || "No se pudo iniciar sesion.";
+          msg.className = "msg error";
+          return;
+        }
+
+        location.href = data.role === "ADMIN" ? "/admin.html" : "/user.html";
+      } catch {
+        msg.textContent = "No se pudo conectar con el servidor.";
+        msg.className = "msg error";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Entrar";
+      }
+    });
+  </script>
+</body>
+</html>
+
+

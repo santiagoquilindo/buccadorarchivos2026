@@ -1,0 +1,267 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 18px;
+  --bg: #f3f5fb;
+  --text: #1a2747;
+  --card-bg: #ffffff;
+  --input-bg: #f8faff;
+  --border: #c8d3ef;
+  --primary: #199f3a;
+  --secondary: #e2f5e8;
+  --secondary-text: #176a31;
+  --danger: #e64a4a;
+  --muted: #526288;
+  --ok: #1f8d4d;
+  --error: #ba2d2d;
+  --shadow: rgba(20, 45, 100, 0.14);
+  --mark-bg: #fff2a8;
+  --mark-text: #20315f;
+}
+
+body.theme-dark {
+  --bg: #091128;
+  --text: #f2f5ff;
+  --card-bg: #111d3f;
+  --input-bg: #1d2a51;
+  --border: #324673;
+  --primary: #1fb34a;
+  --secondary: #234734;
+  --secondary-text: #dcfbe5;
+  --danger: #ff5f5f;
+  --muted: #bdc8ea;
+  --ok: #8cffbd;
+  --error: #ffb4b4;
+  --shadow: rgba(0, 0, 0, 0.32);
+  --mark-bg: #ffde59;
+  --mark-text: #172034;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 10% 10%, #d9e8ff 0%, var(--bg) 50%);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+body.theme-dark {
+  background: radial-gradient(circle at 10% 10%, #1b2a55 0%, var(--bg) 50%);
+}
+
+.card {
+  width: min(980px, 94vw);
+  background: var(--card-bg);
+  padding: 30px;
+  border-radius: 18px;
+  box-shadow: 0 14px 44px var(--shadow);
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  padding: 4px 8px;
+  background: rgba(25, 159, 58, 0.08);
+}
+
+.logo-image {
+  height: 56px;
+  width: auto;
+  display: block;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.theme-toggle {
+  margin: 0;
+  width: auto;
+  padding: 8px 10px;
+  font-size: 1.2rem;
+  background: var(--secondary);
+  color: var(--secondary-text);
+  border: 1px solid var(--border);
+  min-width: 48px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+h2 {
+  margin: 20px 0 10px;
+  font-size: 1.35rem;
+}
+
+.muted {
+  color: var(--muted);
+  margin: 0 0 18px;
+}
+
+label {
+  display: block;
+  margin: 14px 0 8px;
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  outline: none;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+button {
+  margin-top: 14px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--secondary);
+  color: var(--secondary-text);
+}
+
+button:hover {
+  filter: brightness(1.03);
+}
+
+.msg {
+  margin-top: 12px;
+  font-size: 0.98rem;
+}
+
+.msg.error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.msg.ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 22px 0;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.row input {
+  flex: 1;
+}
+
+.btn-icon {
+  width: 52px;
+  padding: 12px 0;
+  border-radius: 12px;
+  background: var(--secondary);
+  color: var(--secondary-text);
+  border: 1px solid var(--border);
+}
+
+.hint {
+  margin-top: 14px;
+  font-size: 0.95rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.actions button {
+  width: 100%;
+}
+
+.danger {
+  background: var(--danger);
+}
+
+mark {
+  background: var(--mark-bg);
+  color: var(--mark-text);
+  border: 2px solid #2f67ea;
+  box-shadow: 0 0 0 1px #2f67ea inset;
+  padding: 0 3px;
+  border-radius: 4px;
+}
+
+mark.mark-ref {
+  background: #ffe15a !important;
+  color: #1d243a !important;
+  border: 2px solid #2f67ea !important;
+  box-shadow: 0 0 0 1px #2f67ea inset;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+mark.mark-search {
+  background: #ffe15a !important;
+  color: #1d243a !important;
+  border: 2px solid #2f67ea !important;
+  box-shadow: 0 0 0 1px #2f67ea inset;
+}
+
+@media (max-width: 920px) {
+  :root { font-size: 17px; }
+  .card { padding: 20px; }
+  .grid2 { grid-template-columns: 1fr; }
+}
+
+
